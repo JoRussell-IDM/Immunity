@@ -12,6 +12,9 @@ import scipy.stats as stats
 import math
 
 expname = 'Challenge_bite_noMFI_infectiousness'
+#'Challenge_bite_noMFI_infectiousness'
+#'Challenge_bite_20_1850_for_refmatch'
+
 exp_dir = createSimDirectoryMap(expname)
 
 exp_dir.sort_values('start_day', inplace=True)
@@ -105,15 +108,15 @@ def new_infection_events_Garki(ind_df):
                 time_since_last = (measurements.datecoll - ind_df.loc[ind-1,:].datecoll) / np.timedelta64(1, 'D')
                 first_malaria_free_date = None
 
-                if time_since_last < 100:
+                if time_since_last < 120:
 
                     first_positive.append({'date': measurements.datecoll, 'area': measurements.area, 'vname':measurements.vname,
                                         'age': measurements.age, 'age_at_enroll':measurements.age_at_enroll,'IRS_status':measurements.IRS_status,'id': measurements.id, 'fever': measurements.fever,
-                                        'asexual_density': measurements.pfa, 'gametocyte_density': measurements.pfg, 'examined': measurements.exam, 'interval': interval, 'time_since_last': time_since_last,'frequency': measurements.infection_frequency})
+                                        'asexual_density': (float(measurements.pfa)/float(measurements.exam))*200, 'gametocyte_density': (float(measurements.pfg)/float(measurements.exam))*200, 'examined': measurements.exam, 'interval': interval, 'time_since_last': time_since_last,'frequency': measurements.infection_frequency})
                 else:
                     lapsed_positive.append({'date': measurements.datecoll, 'area': measurements.area,'vname':measurements.vname,
                                         'age': measurements.age, 'age_at_enroll':measurements.age_at_enroll,'IRS_status':measurements.IRS_status,'id': measurements.id, 'fever': measurements.fever,
-                                        'asexual_density': measurements.pfa, 'gametocyte_density': measurements.pfg, 'examined': measurements.exam, 'interval': interval,'time_since_last': time_since_last,'frequency': measurements.infection_frequency})
+                                        'asexual_density': (float(measurements.pfa)/float(measurements.exam))*200, 'gametocyte_density': (float(measurements.pfg)/float(measurements.exam))*200, 'examined': measurements.exam, 'interval': interval,'time_since_last': time_since_last,'frequency': measurements.infection_frequency})
                 if measurements.IRS_status == 'post_IRS':
                     break
             else:
@@ -124,7 +127,7 @@ def new_infection_events_Garki(ind_df):
 first_positives = []
 lapsed_positives = []
 
-recreate_new_infections_df = False
+recreate_new_infections_df = True
 
 if recreate_new_infections_df == True:
     for ind_id, ind_df in df.groupby('id'):
@@ -141,12 +144,17 @@ if recreate_new_infections_df == True:
     new_infection_df.reset_index(inplace=True)
     # new_infection_df = new_infection_df[new_infection_df.IRS_status == 'post_IRS']
 
-
-    new_infection_df['fraction_asexual_fields'] = new_infection_df['asexual_density'].astype(float)/new_infection_df['examined'].astype(float)
-    new_infection_df['error'] = [float(new_infection_df['examined'][x])*math.sqrt((new_infection_df['fraction_asexual_fields'][x]*(1-new_infection_df['fraction_asexual_fields'][x]))/float(new_infection_df['examined'][x])) for x in new_infection_df.index]
+    try:
+        new_infection_df['fraction_asexual_fields'] = new_infection_df['asexual_density'].astype(float)/new_infection_df['examined'].astype(float)
+        new_infection_df['fraction_asexual_fields'][new_infection_df['fraction_asexual_fields'] > 1] = 1
+        new_infection_df['error'] = [float(new_infection_df['examined'][x])*math.sqrt((new_infection_df['fraction_asexual_fields'][x]*(1-new_infection_df['fraction_asexual_fields'][x]))/float(new_infection_df['examined'][x])) for x in new_infection_df.index]
+    except:
+        print(x)
 
 else:
     new_infection_df = pd.read_csv(r'C:\Uganda\new_infection_Garki_with_error.csv')
+    new_infection_df.to_csv(r'C:\Uganda\new_infection_Garki_with_error.csv')
+
 
 sim_match_set = []
 def round_down(num, divisor):
@@ -161,7 +169,8 @@ for i,infection in new_infection_df.iterrows():
 
     #compare in order age,interval,asexual density, gam +/-
     #compare to ref interval rounded down to multiples of 10s
-    interval_to_match = 0#round_down(int(infection.interval),10)
+    interval_to_match = 0#round_down(int(infection.interval),10)  #change to zero if just matching to noMFI
+    interval_ref_infection = round_down(int(infection.interval),10)
     age_to_match = int(365*infection.age)
     gametocytes_to_match = bool(infection.gametocyte_density)
     asexual_to_match = int(infection.asexual_density)
@@ -193,7 +202,7 @@ for i,infection in new_infection_df.iterrows():
         #and append the relevnat fields to the dictionary matched individuals sim_match
         sim_match[int(infection.id)] = {'age':sim_bank[interval_to_match]['age'][random_selection],
                                            'id':sim_bank[interval_to_match]['id'][random_selection],
-                                           'interval': interval_to_match,
+                                           'interval': interval_ref_infection,
                                            'asexual_to_match': asexual_to_match,
                                            'infectiousness': sim_bank[interval_to_match]['infectiousness'][random_selection],
                                            'pos_gametocyte_slides': sim_bank[interval_to_match]['pos_gametocyte_slides'][random_selection],
@@ -210,7 +219,7 @@ for i,infection in new_infection_df.iterrows():
         unmatched_infections.append(infection)
 
 
-np.save('sim_match_noMFI.npy', sim_match)
+np.save('sim_match_MFIrange.npy', sim_match)
 
 print(len(unmatched_infections))
 print(sim_match.keys())
